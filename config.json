@@ -1,0 +1,10 @@
+{
+    "path_to_config_file" : "/LockPick/config.json",
+    "path_to_scripts" : "/LockPick/scripts/",
+    "output_directory" : "/LockPick/output_test_10mil_reads/",
+    "chosen_panel_csv" : "/LockPick/mock_data/chosen_panel.csv",
+    "reference_genome_path" : "/genomes/hg38_40/hg38_40.fa_norm",
+    "fastq_in_1" : "/LockPick/mock_data/0_in_silico_reads/with_adapters/amplicon_read1.fq",
+    "fastq_in_2" : "/LockPick/mock_data/0_in_silico_reads/with_adapters/amplicon_read2.fq",
+    "target_cpg_bed" : "/genomes/hg38_40/zhang_hg38.bed"
+}
