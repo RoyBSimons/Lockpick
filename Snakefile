@@ -117,4 +117,4 @@ rule keep_target_cpgs:
 	output:
             target_cpgs_cov = config['output_directory'] + "{sample}_filtered_1_bismark_bt2_pe.bismark_target_cpgs.cov"
 	shell:
-            "bedtools intersect -a {input.genomic_cov} -b {input.target_cpg_bed} > {output.target_cpgs_cov}"
+            "bedtools intersect -a {input.target_cpg_bed} -b {input.genomic_cov} -wb > {output.target_cpgs_cov}"
