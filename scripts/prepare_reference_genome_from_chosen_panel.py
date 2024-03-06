@@ -34,7 +34,7 @@ def main():
     with open(reference_amplicons_path, 'w', newline='') as output:
         for i,record in enumerate(records):
             amplicon = 'NNNN' + str(record.seq) + 'NNNN' # Add N-padding for bismark
-            output.write('>Target' + str(i) + '_' +record.id + '\n')
+            output.write('>Target' + str(i+1) + '_' +record.id + '\n')
             output.write(amplicon + '\n')
 
 def G_to_A_convert(sequence):
