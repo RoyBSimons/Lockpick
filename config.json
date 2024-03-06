@@ -4,8 +4,7 @@
     "output_directory" : "/Lockpick/output/",
     "chosen_panel_csv" : "/Lockpick/mock_data/chosen_panel.csv",
     "reference_genome_path" : "/genomes/hg38_40/hg38_40.fa_norm",
-    "fastq_in_1" : "/Lockpick/mock_data/amplicon_read1.fq",
-    "fastq_in_2" : "/Lockpick/mock_data/amplicon_read2.fq",
-    "target_cpg_bed" : "/genomes/hg38_40/zhang_hg38.bed",
-    "samples" : ["s1","s2"]
+    "fastq_folder" : "/home/roy/opt/Lockpick/Zhang_test/",
+    "target_cpg_bed" : "/media/nw_disk2/roy/genomes/hg38_40/zhang_hg38.bed",
+    "samples" : ["S1"]
 }
