@@ -5,8 +5,10 @@ rule all:
                outconfig = config['output_directory'] + "config.json",
                multiqc_1 = config['output_directory'] + "multiqc_report.html",
                target_cpgs_cov = expand(config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark_target_cpgs.cov", sample=config["samples"]),
-               off_target_summary = expand(config['output_directory'] + "{sample}/" + "{sample}_off_target_summary.txt", sample = config["samples"])
+               off_target_summary = expand(config['output_directory'] + "{sample}/" + "{sample}_off_target_summary.txt", sample = config["samples"]),
+               target_cpgs_cov_deduplicated = expand(config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.bismark_target_cpgs.cov", sample=config["samples"])
 #---------------------------------------------------------------------------------------------------
+
 rule copy_config_to_output_directory:
         input:
                 config['path_to_config_file']
@@ -186,4 +188,29 @@ rule off_target_analysis:
 		paste -d '\t' {output.read_id} {output.origin_a_1} {output.origin_g_1} {output.origin_A_2} {output.origin_G_2} {output.insert_lengths}  > {output.origin}
 		samtools view {input.bam} | awk '{{sub("_"," ")}}{{print $1" "$2}}' > {output.read_id_mapped}
 		python {config[path_to_scripts]}group_and_count_reads.py -m {output.read_id_mapped} -r {output.origin} -o {output.read_groups}> {output.off_target_summary}
+		"""
+
+rule deduplication_UMIs:
+	input:
+		bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam",
+		target_cpg_bed = config['target_cpg_bed']
+	output:
+		header = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.sam_header",
+		alignment = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.sam_alignments",
+		sam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.sam",
+		deduplicated_sam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.sam",
+		cov = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.bismark.cov.gz",
+		cov_genomic = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.bismark_genomic.gz",
+		cov_target = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.bismark_target_cpgs.cov"
+	shell:
+		"""
+		samtools view -H {input.bam} > {output.header} ;
+		samtools view {input.bam} > {output.alignment} ;
+		awk -v OFS="\t" '{split($1,a,"_")}{split(a[1],umi,":")}{split($1,r,":")}{split(a[2],read,":")}{$1=""; print r[1]":"r[2]":"r[3]":"r[4]":"r[5]":"r[6]":"r[7]":"r[11]"_"read[1]":"r[9]":"r[10]":"umi[8]$0;}' {output.alignment} > {output.sam} ;
+		cat {output.sam} >> {output.header} ;
+		mv {output.header} {output.sam} ;
+		deduplicate_bismark -p --barcode {output.sam} --output_dir {config[output_directory]}{sample}/;
+		bismark_methylation_extractor -p --cutoff 1 --gzip --multicore 3 --comprehensive --bedGraph --zero_based --cytosine_report --no_overlap --genome_folder {config[output_directory]}reference_amplicons/ -o {config[output_directory]}{sample}/ {output.deduplicated_sam} ;
+		python {config[path_to_scripts]}targeted_cov_to_genome_cov.py -t {output.cov} -g {output.cov_genomic} -o {config[output_directory]}{sample}/ ;
+		bedtools intersect -a {input.target_cpg_bed} -b {output.cov_genomic} -wb > {output.cov_target}
 		"""
