@@ -1,10 +1,13 @@
 {
     "path_to_config_file" : "/Lockpick/config.json",
+    "path_to_work_dir" : "./",
     "path_to_scripts" : "/Lockpick/scripts/",
     "output_directory" : "/Lockpick/output/",
     "chosen_panel_csv" : "/Lockpick/mock_data/chosen_panel.csv",
     "reference_genome_path" : "/genomes/hg38_40/hg38_40.fa_norm",
-    "fastq_folder" : "/home/roy/opt/Lockpick/Zhang_test/",
-    "target_cpg_bed" : "/media/nw_disk2/roy/genomes/hg38_40/zhang_hg38.bed",
-    "samples" : ["S1"]
+    "fastq_folder" : "/Lockpick/data/",
+    "target_cpg_bed" : "/Locksmith/data/target_list.bed",
+    "bismark_flags" : "--multicore 3 --non_directional -N 1 -D 15 -R 2 --score_min L,0,-0.2 -I 100",
+    "cutadapt_flags" : "-a AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT",
+    "samples" : ["S1","S2","S13"]
 }

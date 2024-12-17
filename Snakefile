@@ -2,9 +2,10 @@ configfile:     config['path_to_config_file']
 workdir:	config['path_to_work_dir']
 rule all:
         input:
-                config = config['path_to_config_file'],
-                multiqc_1 = config['output_directory'] + "multiqc_report.html",
-                target_cpgs_cov = expand(config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark_target_cpgs.cov", sample=config["samples"])
+               outconfig = config['output_directory'] + "config.json",
+               multiqc_1 = config['output_directory'] + "multiqc_report.html",
+               target_cpgs_cov = expand(config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark_target_cpgs.cov", sample=config["samples"]),
+               off_target_summary = expand(config['output_directory'] + "{sample}/" + "{sample}_off_target_summary.txt", sample = config["samples"])
 #---------------------------------------------------------------------------------------------------
 rule copy_config_to_output_directory:
         input:
@@ -35,22 +36,43 @@ rule create_primer_files_for_filtering:
         input:
                 chosen_panel = config['chosen_panel_csv']
         output:
-                primers_A = config['output_directory'] + "primers_A.fasta",
-		primers_a = config['output_directory'] + "primers_a.fasta"
+                primers_A_2 = config['output_directory'] + "primers_A_2.fasta",
+		primers_a_1 = config['output_directory'] + "primers_a_1.fasta",
+		primers_G_2 = config['output_directory'] + "primers_G_2.fasta",
+		primers_g_1 = config['output_directory'] + "primers_g_1.fasta"
         shell:
-                "python {config[path_to_scripts]}chosen_panel_to_trim_fastas.py -A {output.primers_A} -a {output.primers_a} -c {input.chosen_panel}"
-#rule perform_cutadapt:
-#        input:
-#                fq_in_1 = config['fastq_folder'] + "{sample}_1.fq",
-#                fq_in_2 = config['fastq_folder'] + "{sample}_2.fq",
-#                primers_A = config['output_directory'] + "primers_A.fasta",
-#                primers_a = config['output_directory'] + "primers_a.fasta"
-#        output:
-#                fq_out_1 = config['output_directory'] + "{sample}_filtered_1.fq",
-#                fq_out_2 = config['output_directory'] + "{sample}_filtered_2.fq"
-#        shell:
-#                "cutadapt -A file:{input.primers_A} -a file:{input.primers_a} -o {output.fq_out_1} -p {output.fq_out_2} {input.fq_in_1} {input.fq_in_2}"
-#
+                "python {config[path_to_scripts]}chosen_panel_to_trim_fastas.py -c {input.chosen_panel} -o {config[output_directory]}"
+
+rule perform_cutadapt:
+        input:
+                fq_in_1 = config['fastq_folder'] + "{sample}_1.fq",
+                fq_in_2 = config['fastq_folder'] + "{sample}_2.fq",
+                primers_A_2 = config['output_directory'] + "primers_A_2.fasta",
+                primers_a_1 = config['output_directory'] + "primers_a_1.fasta",
+		primers_g_1 = config['output_directory'] + "primers_g_1.fasta",
+		primers_G_2 = config['output_directory'] + "primers_G_2.fasta"
+	output:
+		fq_adapter_1 = config['output_directory'] + "{sample}/" + "{sample}_adapter_1.fq",
+		fq_adapter_2 = config['output_directory'] + "{sample}/" + "{sample}_adapter_2.fq",
+		fq_a_1 = config['output_directory'] + "{sample}/" + "{sample}_a_1.fq",
+		info_a_1 = config['output_directory'] + "{sample}/" + "{sample}_info_a_1.txt",
+		fq_A_2 = config['output_directory'] + "{sample}/" + "{sample}_A_2.fq",
+		info_A_2 = config['output_directory'] + "{sample}/" + "{sample}_info_A_2.txt",
+                fq_out_1 = config['output_directory'] + "{sample}/" + "{sample}_filtered_1.fq",
+		info_g_1 = config['output_directory'] + "{sample}/" + "{sample}_info_g_1.txt",
+                fq_out_2 = config['output_directory'] + "{sample}/" + "{sample}_filtered_2.fq",
+		info_G_2 = config['output_directory'] + "{sample}/" + "{sample}_info_G_2.txt"
+	resources:
+		load=10
+	shell:
+		"""
+		cutadapt {config[cutadapt_flags]} -o {output.fq_adapter_1} -p {output.fq_adapter_2} {input.fq_in_1} {input.fq_in_2} --cores 10
+		cutadapt -a file:{input.primers_a_1} -o {output.fq_a_1}  {output.fq_adapter_1} --info-file {output.info_a_1} --action retain --cores 10
+		cutadapt --cut 9 -g ^file:{input.primers_g_1} -o {output.fq_out_1} {output.fq_a_1} --info-file {output.info_g_1} --action retain --cores 10
+		cutadapt -a file:{input.primers_A_2} -o {output.fq_A_2} {output.fq_adapter_2} --info-file {output.info_A_2} --action retain --cores 10
+		cutadapt -g ^file:{input.primers_G_2} -o {output.fq_out_2} {output.fq_A_2} --info-file {output.info_G_2} --action retain --cores 10
+		"""
+
 #STEP 2: Align to target references
 rule prepare_reference_genome_from_chosen_panel:
 	input:
@@ -78,14 +100,19 @@ rule bismark:
 	input:
               CT_converted_genome = config['output_directory'] + "reference_amplicons/Bisulfite_Genome/CT_conversion/genome_mfa.CT_conversion.fa",
               GA_converted_genome = config['output_directory'] + "reference_amplicons/Bisulfite_Genome/GA_conversion/genome_mfa.GA_conversion.fa",
-              fq_in_1 = config['fastq_folder'] + "{sample}_1.fq",
-              fq_in_2 = config['fastq_folder'] + "{sample}_2.fq"
+              fq_in_1 = config['output_directory'] + "{sample}/" + "{sample}_filtered_1.fq",
+              fq_in_2 = config['output_directory'] + "{sample}/" + "{sample}_filtered_2.fq"
 	output:
               bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam"
 	resources:
 	      load=10
 	shell:
-             "bismark --genome {config[output_directory]}reference_amplicons/ --non_directional --multicore 3 -D 15 -R 2 --score_min L,0,-1.5 -N " + config['allowed_mismatches'] + " -1 {input.fq_in_1} -2 {input.fq_in_2} -o {config[output_directory]}" + "{wildcards.sample}/ --temp_dir {config[output_directory]}"
+		"""
+		bismark --genome {config[output_directory]}reference_amplicons/ {config[bismark_flags]} -1 {input.fq_in_1} -2 {input.fq_in_2} -o {config[output_directory]}{wildcards.sample}/ --temp_dir {config[output_directory]}
+		mv {config[output_directory]}{wildcards.sample}/{wildcards.sample}_filtered_1_bismark_bt2_pe.bam {config[output_directory]}{wildcards.sample}/{wildcards.sample}_1_bismark_bt2_pe.bam
+		"""
+
+
 
 rule bismark_report_and_summary: #summary will combine reports per sample
 	input:
@@ -125,3 +152,35 @@ rule keep_target_cpgs:
             target_cpgs_cov = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark_target_cpgs.cov"
 	shell:
             "bedtools intersect -a {input.target_cpg_bed} -b {input.genomic_cov} -wb > {output.target_cpgs_cov}"
+
+rule off_target_analysis:
+	input:
+		info_a_1 = config['output_directory'] + "{sample}/" + "{sample}_info_a_1.txt",
+		info_A_2 = config['output_directory'] + "{sample}/" + "{sample}_info_A_2.txt",
+		info_g_1 = config['output_directory'] + "{sample}/" + "{sample}_info_g_1.txt",
+		info_G_2 = config['output_directory'] + "{sample}/" + "{sample}_info_G_2.txt",
+		bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam"
+	output:
+		origin_a_1 = config['output_directory'] + "{sample}/" + "{sample}_origin_a_1.tsv",
+		origin_A_2 = config['output_directory'] + "{sample}/" + "{sample}_origin_g_1.tsv",
+		origin_g_1 = config['output_directory'] + "{sample}/" + "{sample}_origin_A_2.tsv",
+		origin_G_2 = config['output_directory'] + "{sample}/" + "{sample}_origin_G_2.tsv",
+		origin = config['output_directory'] + "{sample}/" + "{sample}_origin.tsv",
+		insert_lengths = config['output_directory'] + "{sample}/" + "{sample}_insert_lengths.tsv",
+		read_id = config['output_directory'] + "{sample}/" + "{sample}_read_id.tsv",
+		read_id_mapped = config['output_directory'] + "{sample}/" + "{sample}_read_id_mapped.tsv",
+		off_target_summary = config['output_directory'] + "{sample}/" + "{sample}_off_target_summary.txt",
+		read_groups =  config['output_directory'] + "{sample}/" + "{sample}_read_groups.csv"
+
+	shell:
+		"""
+		cat {input.info_a_1} | awk -F '\t' '{{print $8}}' > {output.origin_a_1}
+		cat {input.info_g_1} | awk -F '\t' '{{print $8}}' > {output.origin_g_1}
+		cat {input.info_A_2} | awk -F '\t' '{{print $8}}' > {output.origin_A_2}
+		cat {input.info_G_2} | awk -F '\t' '{{print $8}}' > {output.origin_G_2}
+		cat {input.info_G_2} | awk -F '\t' '{{print $1}}' > {output.read_id}
+		python {config[path_to_scripts]}info_to_insert.py -a {input.info_a_1} -A {input.info_A_2} -g {input.info_g_1} -G {input.info_G_2} -o {output.insert_lengths}
+		paste -d '\t' {output.read_id} {output.origin_a_1} {output.origin_g_1} {output.origin_A_2} {output.origin_G_2} {output.insert_lengths}  > {output.origin}
+		samtools view {input.bam} | awk '{{sub("_"," ")}}{{print $1" "$2}}' > {output.read_id_mapped}
+		python {config[path_to_scripts]}group_and_count_reads.py -m {output.read_id_mapped} -r {output.origin} -o {output.read_groups}> {output.off_target_summary}
+		"""
