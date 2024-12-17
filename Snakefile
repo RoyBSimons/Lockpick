@@ -11,9 +11,12 @@ rule copy_config_to_output_directory:
         input:
                 config['path_to_config_file']
         output:
-                config['output_directory'] + "/config.json"
+                config['output_directory'] + "config.json"
         shell:
-                "cp {input} {output}"
+                """
+		cp {input} {output}
+		cp {config[path_to_scripts]}../Snakefile {config[output_directory]}Snakefile
+		"""
 #STEP 1: Prepare reads: A. fastqc & Multiqc, C. cut adapter and probe sequences. ### Add a filter-on-read-quality step! (B)
 rule fastqc:
         input:
