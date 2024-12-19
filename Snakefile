@@ -1,6 +1,6 @@
 configfile:     config['path_to_config_file']
 workdir:	config['path_to_work_dir']
-rule all:
+rule all: #Output coverage files (deduplicated and bulk) together with the off-target analysis.
         input:
                outconfig = config['output_directory'] + "config.json",
                multiqc_1 = config['output_directory'] + "multiqc_report.html",
@@ -9,7 +9,7 @@ rule all:
                target_cpgs_cov_deduplicated = expand(config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe_barcode.deduplicated.bismark_target_cpgs.cov", sample=config["samples"])
 #---------------------------------------------------------------------------------------------------
 
-rule copy_config_to_output_directory:
+rule copy_config_to_output_directory: #Copy configuration file and Snakefile to output directory for future reference.
         input:
                 config['path_to_config_file']
         output:
@@ -20,7 +20,7 @@ rule copy_config_to_output_directory:
 		cp {config[path_to_scripts]}../Snakefile {config[output_directory]}Snakefile
 		"""
 #STEP 1: Prepare reads: A. fastqc & Multiqc, C. cut adapter and probe sequences. ### Add a filter-on-read-quality step! (B)
-rule fastqc:
+rule fastqc: #Create fastqc reports for each sample.
         input:
                 config['fastq_folder'] + "{sample}_{read}.fq"
         output:
@@ -29,7 +29,7 @@ rule fastqc:
 	shell:
                "fastqc {input} -o {config[output_directory]}"+ "{wildcards.sample}/"
 
-rule multiqc:
+rule multiqc: #Combine fastqc reports into one multiqc report.
         input:
                 fastqcs = expand(config['output_directory'] + "{sample}/" + "{sample}_{read}_fastqc.zip", sample=config["samples"], read = ["1","2"])
         output:
@@ -37,7 +37,7 @@ rule multiqc:
 	shell:
                "multiqc {input.fastqcs} -o {config[output_directory]}"
 
-rule create_primer_files_for_filtering:
+rule create_primer_files_for_filtering: #Construct cutadapt primer files from the probe panel design by Locksmith for trimming.
         input:
                 chosen_panel = config['chosen_panel_csv']
         output:
@@ -48,7 +48,7 @@ rule create_primer_files_for_filtering:
         shell:
                 "python {config[path_to_scripts]}chosen_panel_to_trim_fastas.py -c {input.chosen_panel} -o {config[output_directory]}"
 
-rule perform_cutadapt:
+rule perform_cutadapt: #Trim reads based on probe arms designed by Locksmith and report probe arm occurence in reads for off-target analysis.
         input:
                 fq_in_1 = config['fastq_folder'] + "{sample}_1.fq",
                 fq_in_2 = config['fastq_folder'] + "{sample}_2.fq",
@@ -79,7 +79,7 @@ rule perform_cutadapt:
 		"""
 
 #STEP 2: Align to target references
-rule prepare_reference_genome_from_chosen_panel:
+rule prepare_reference_genome_from_chosen_panel: #Create a reference genome consisting of the amplicons obtained by capture with the Locksmith panel.
 	input:
                 chosen_panel = config['chosen_panel_csv'],
                 reference_genome = config['reference_genome_path']
@@ -92,7 +92,7 @@ rule prepare_reference_genome_from_chosen_panel:
                python {config[path_to_scripts]}prepare_reference_genome_from_chosen_panel.py -c {input.chosen_panel} -t {output.targets_fasta} -b {output.targets_bed} -r {input.reference_genome} -a {output.amplicons}
                """
 
-rule bismark_prepare_genome:
+rule bismark_prepare_genome: #Prepare reference genome for bismark input
 	input:
                amplicons  = config['output_directory'] + "reference_amplicons/reference_amplicons.fasta"
 	output:
@@ -101,7 +101,7 @@ rule bismark_prepare_genome:
 	shell:
               "bismark_genome_preparation {config[output_directory]}reference_amplicons/"
 	
-rule bismark:
+rule bismark: #Align reads to bisulfite converted reference genome.
 	input:
               CT_converted_genome = config['output_directory'] + "reference_amplicons/Bisulfite_Genome/CT_conversion/genome_mfa.CT_conversion.fa",
               GA_converted_genome = config['output_directory'] + "reference_amplicons/Bisulfite_Genome/GA_conversion/genome_mfa.GA_conversion.fa",
@@ -117,9 +117,7 @@ rule bismark:
 		mv {config[output_directory]}{wildcards.sample}/{wildcards.sample}_filtered_1_bismark_bt2_pe.bam {config[output_directory]}{wildcards.sample}/{wildcards.sample}_1_bismark_bt2_pe.bam
 		"""
 
-
-
-rule bismark_report_and_summary: #summary will combine reports per sample
+rule bismark_report_and_summary: #Summary will combine reports per sample.
 	input:
              bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam"
 	output:
@@ -130,7 +128,8 @@ rule bismark_report_and_summary: #summary will combine reports per sample
              bismark2report --dir {config[output_directory]}{wildcards.sample}/
              bismark2summary {input.bam} -o {config[output_directory]}{wildcards.sample}/bismark_summary
              """
-rule bismark_methylation_extractor:
+
+rule bismark_methylation_extractor: #Extract CpG methylation from bam file into a coverage file.
 	input:
              bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam"
 	output:
@@ -141,7 +140,7 @@ rule bismark_methylation_extractor:
              "bismark_methylation_extractor -p --cutoff 1 --gzip --multicore 3 --comprehensive --bedGraph --zero_based --cytosine_report --no_overlap --genome_folder {config[output_directory]}reference_amplicons/ -o {config[output_directory]}{wildcards.sample}/ {input.bam}"
 
 #STEP 3 Probe panel analysis (probe distribution)
-rule probe_panel_analysis:
+rule probe_panel_analysis: #Add genomic locations to coverage file.
 	input:
              targeted_cov = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark.cov.gz"
 	output:
@@ -149,7 +148,7 @@ rule probe_panel_analysis:
 	shell:
              "python {config[path_to_scripts]}targeted_cov_to_genome_cov.py -t {input.targeted_cov} -g {output.genomic_cov} -o {config[output_directory]}{wildcards.sample}/"
 
-rule keep_target_cpgs:
+rule keep_target_cpgs: #Keep only the target CpGs in the coverage file.
 	input:
             genomic_cov = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bismark_genomic.cov",
             target_cpg_bed = config['target_cpg_bed']
@@ -158,7 +157,7 @@ rule keep_target_cpgs:
 	shell:
             "bedtools intersect -a {input.target_cpg_bed} -b {input.genomic_cov} -wb > {output.target_cpgs_cov}"
 
-rule off_target_analysis:
+rule off_target_analysis: #Off-target analysis by collating occurance of probe arms in unmapped reads.
 	input:
 		info_a_1 = config['output_directory'] + "{sample}/" + "{sample}_info_a_1.txt",
 		info_A_2 = config['output_directory'] + "{sample}/" + "{sample}_info_A_2.txt",
@@ -190,7 +189,7 @@ rule off_target_analysis:
 		python {config[path_to_scripts]}group_and_count_reads.py -m {output.read_id_mapped} -r {output.origin} -o {output.read_groups}> {output.off_target_summary}
 		"""
 
-rule deduplication_UMIs:
+rule deduplication_UMIs: #Deduplication of reads which originate from the same capture event by UMIs. Also create coverage files with deduplicated reads.
 	input:
 		bam = config['output_directory'] + "{sample}/" + "{sample}_1_bismark_bt2_pe.bam",
 		target_cpg_bed = config['target_cpg_bed']
